@@ -74,11 +74,45 @@ final class DILDOTests: XCTestCase {
         container.register(ProtocolC.self, scope: .graph) { _ in ClassC() }
         
         // When
-        let a = container.resolve(ProtocolC.self)
-        let b = container.resolve(ClassC.self)
+        let a = container.tryToResolve(ProtocolC.self)
+        let b = container.tryToResolve(ClassC.self)
         
         // Then
         XCTAssertNotNil(a)
         XCTAssertNil(b)
+    }
+    
+    /// Circular dependencies will be detected
+    func test_circularDependency_willBeDetected() {
+        // Given
+        var isCircularDependencyDetected = false
+        
+        container.register(ClassAA.self) { resolver in
+            ClassAA(
+                bb: resolver.tryToResolve(ClassBB.self)
+            )
+        }
+        
+        container.register(ClassBB.self) { resolver in
+            ClassBB(
+                cc: resolver.forceResolve(ClassCC.self)
+            )
+        }
+        
+        container.register(ClassCC.self) { resolver in
+            do {
+                _ = try resolver.resolve(ClassAA.self).get()
+            } catch ResolvationError.circularDependencyDetected {
+                isCircularDependencyDetected = true
+            } catch { }
+            
+            return ClassCC(aa: nil)
+        }
+        
+        // When
+        _ = container.resolve(ClassAA.self)
+        
+        // Then
+        XCTAssertTrue(isCircularDependencyDetected)
     }
 }

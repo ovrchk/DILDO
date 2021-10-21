@@ -7,16 +7,6 @@
 
 import Foundation
 
-public protocol Resolver {
-    func resolve<T>(_ type: T.Type) -> T?
-}
-
-public extension Resolver {
-    func forceResolve<T>(_ type: T.Type) -> T {
-        resolve(type)!
-    }
-}
-
 public final class Container: Resolver {
     
     public enum Scope: Int {
@@ -35,24 +25,37 @@ public final class Container: Resolver {
     
     public init() {}
     
-    public func register<T>(_ type: T.Type, scope: Scope, _ factory: @escaping (Resolver) -> T) {
+    public func register<T>(
+        _ type: T.Type,
+        scope: Scope = .graph,
+        _ factory: @escaping (Resolver) -> T
+    ) {
         registrations[getKey(for: type)] = Registration.prototype(scope, factory)
     }
     
     // MARK: - Resolver
     
-    public func resolve<T>(_ type: T.Type) -> T? {
-        incrementResolvationDepth()
-        defer { decrementResolvationDepth() }
+    public func resolve<T>(_ type: T.Type) -> Result<T, ResolvationError> {
+        do {
+            try incrementResolvationDepth()
+        } catch ResolvationError.circularDependencyDetected {
+            return .failure(.circularDependencyDetected)
+        } catch {
+            fatalError()
+        }
+        
+        defer {
+            decrementResolvationDepth()
+        }
         
         let key = getKey(for: T.self)
         
         switch getRegistration(for: key) as Registration<T>? {
         case let .resolved(result):
-            return result
+            return .success(result)
         case let .prototype(scope, factory):
             if let resolvedObject = resolvedObjects[key] as? T {
-                return resolvedObject
+                return .success(resolvedObject)
             } else {
                 let resolvedObject = factory(self)
                 resolvedObjects[key] = resolvedObject
@@ -64,10 +67,10 @@ public final class Container: Resolver {
                     break
                 }
                 
-                return resolvedObject
+                return .success(resolvedObject)
             }
         case .none:
-            return nil
+            return .failure(.notRegistered)
         }
     }
 }
@@ -83,11 +86,11 @@ private extension Container {
 }
 
 private extension Container {
-    func incrementResolvationDepth() {
+    func incrementResolvationDepth() throws {
         resolvationDepth += 1
         
         if resolvationDepth > registrations.count {
-            fatalError("Circular dependency")
+            throw ResolvationError.circularDependencyDetected
         }
     }
     

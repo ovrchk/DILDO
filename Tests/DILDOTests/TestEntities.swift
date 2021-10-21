@@ -27,3 +27,28 @@ final class ClassB {
 
 protocol ProtocolC {}
 final class ClassC: ProtocolC {}
+
+final class ClassAA {
+    let bb: ClassBB?
+    
+    init(bb: ClassBB?) {
+        self.bb = bb
+    }
+}
+
+final class ClassBB {
+    let cc: ClassCC?
+    
+    init(cc: ClassCC?) {
+        self.cc = cc
+    }
+}
+
+
+final class ClassCC {
+    let aa: ClassAA?
+    
+    init(aa: ClassAA?) {
+        self.aa = aa
+    }
+}
